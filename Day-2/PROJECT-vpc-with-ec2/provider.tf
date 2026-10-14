@@ -1,13 +1,19 @@
 terraform {
+  required_version = ">= 1.9, < 2.0"
   required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "5.11.0"
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.0"
+    }
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~> 4.0"
     }
   }
 }
 
-provider "aws" {
-  # Configuration options
-  region = "us-east-1"
+provider "azurerm" {
+  features {}
+  use_cli             = true
+  storage_use_azuread = true
 }

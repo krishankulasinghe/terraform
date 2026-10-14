@@ -1,12 +1,12 @@
 **Terraform State File**
 
-Terraform is an Infrastructure as Code (IaC) tool used to define and provision infrastructure resources. The Terraform state file is a crucial component of Terraform that helps it keep track of the resources it manages and their current state. This file, often named `terraform.tfstate`, is a JSON or HCL (HashiCorp Configuration Language) formatted file that contains important information about the infrastructure's current state, such as resource attributes, dependencies, and metadata.
+Terraform is an Infrastructure as Code (IaC) tool used to define and provision infrastructure resources. The Terraform state file is a crucial component of Terraform that helps it keep track of the resources it manages and their current state. This file, often named `terraform.tfstate`, is a JSON formatted file that contains important information about the infrastructure's current state, such as resource attributes, dependencies, and metadata.
 
 **Advantages of Terraform State File:**
 
 1. **Resource Tracking**: The state file keeps track of all the resources managed by Terraform, including their attributes and dependencies. This ensures that Terraform can accurately update or destroy resources when necessary.
 
-2. **Concurrency Control**: Terraform uses the state file to lock resources, preventing multiple users or processes from modifying the same resource simultaneously. This helps avoid conflicts and ensures data consistency.
+2. **Concurrency Control**: A backend that supports locking locks state during writes, preventing concurrent Terraform runs from modifying the same state. This does not lock Azure resources against portal changes. This helps avoid conflicts and ensures data consistency.
 
 3. **Plan Calculation**: Terraform uses the state file to calculate and display the difference between the desired configuration (defined in your Terraform code) and the current infrastructure state. This helps you understand what changes Terraform will make before applying them.
 
@@ -18,95 +18,88 @@ Terraform is an Infrastructure as Code (IaC) tool used to define and provision i
 
 2. **Versioning Complexity**: Managing state files in VCS can lead to complex versioning issues, especially when multiple team members are working on the same infrastructure.
 
-**Overcoming Disadvantages with Remote Backends (e.g., S3):**
+**Overcoming Disadvantages with Remote Backends (Azure Blob Storage):**
 
-A remote backend stores the Terraform state file outside of your local file system and version control. Using S3 as a remote backend is a popular choice due to its reliability and scalability. Here's how to set it up:
+A remote backend stores state outside your local files and Git. Azure Blob Storage encrypts data at rest and the `azurerm` backend uses Blob leases for locking. No separate lock database is needed. The backend is part of Terraform CLI; the AzureRM provider creates resources. They have separate authentication settings.
 
-1. **Create an S3 Bucket**: Create an S3 bucket in your AWS account to store the Terraform state. Ensure that the appropriate IAM permissions are set up.
+## Create storage before initializing the backend
 
-2. **Configure Remote Backend in Terraform:**
+The backend storage must exist before `terraform init`. Create it separately so `terraform destroy` in this lesson cannot delete the storage that holds its state. Complete Day 1 login and set `ARM_SUBSCRIPTION_ID`. You need resource creation permission and permission to grant the Blob data role. Contributor alone cannot grant roles. Ask an administrator if your account cannot grant them.
 
-   ```hcl
-   # In your Terraform configuration file (e.g., main.tf), define the remote backend.
-   terraform {
-     backend "s3" {
-       bucket         = "your-terraform-state-bucket"
-       key            = "path/to/your/terraform.tfstate"
-       region         = "us-east-1" # Change to your desired region
-       encrypt        = true
-       dynamodb_table = "your-dynamodb-table"
-     }
-   }
-   ```
+Run the following in PowerShell. Replace the example storage name with your own globally unique name (3–24 lowercase letters or digits). Keep these names for cleanup:
 
-   Replace `"your-terraform-state-bucket"` and `"path/to/your/terraform.tfstate"` with your S3 bucket and desired state file path.
-
-3. **DynamoDB Table for State Locking:**
-
-   To enable state locking, create a DynamoDB table and provide its name in the `dynamodb_table` field. This prevents concurrent access issues when multiple users or processes run Terraform.
-
-**State Locking with DynamoDB:**
-
-DynamoDB is used for state locking when a remote backend is configured. It ensures that only one user or process can modify the Terraform state at a time. Here's how to create a DynamoDB table and configure it for state locking:
-
-1. **Create a DynamoDB Table:**
-
-   You can create a DynamoDB table using the AWS Management Console or AWS CLI. Here's an AWS CLI example:
-
-   ```sh
-   aws dynamodb create-table --table-name your-dynamodb-table --attribute-definitions AttributeName=LockID,AttributeType=S --key-schema AttributeName=LockID,KeyType=HASH --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5
-   ```
-
-2. **Configure the DynamoDB Table in Terraform Backend Configuration:**
-
-   In your Terraform configuration, as shown above, provide the DynamoDB table name in the `dynamodb_table` field under the backend configuration.
-
-By following these steps, you can securely store your Terraform state in S3 with state locking using DynamoDB, mitigating the disadvantages of storing sensitive information in version control systems and ensuring safe concurrent access to your infrastructure. For a complete example in Markdown format, you can refer to the provided example below:
-
-```markdown
-# Terraform Remote Backend Configuration with S3 and DynamoDB
-
-## Create an S3 Bucket for Terraform State
-
-1. Log in to your AWS account.
-
-2. Go to the AWS S3 service.
-
-3. Click the "Create bucket" button.
-
-4. Choose a unique name for your bucket (e.g., `your-terraform-state-bucket`).
-
-5. Follow the prompts to configure your bucket. Ensure that the appropriate permissions are set.
-
-## Configure Terraform Remote Backend
-
-1. In your Terraform configuration file (e.g., `main.tf`), define the remote backend:
-
-   ```hcl
-   terraform {
-     backend "s3" {
-       bucket         = "your-terraform-state-bucket"
-       key            = "path/to/your/terraform.tfstate"
-       region         = "us-east-1" # Change to your desired region
-       encrypt        = true
-       dynamodb_table = "your-dynamodb-table"
-     }
-   }
-   ```
-
-   Replace `"your-terraform-state-bucket"` and `"path/to/your/terraform.tfstate"` with your S3 bucket and desired state file path.
-
-2. Create a DynamoDB Table for State Locking:
-
-   ```sh
-   aws dynamodb create-table --table-name your-dynamodb-table --attribute-definitions AttributeName=LockID,AttributeType=S --key-schema AttributeName=LockID,KeyType=HASH --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5
-   ```
-
-   Replace `"your-dynamodb-table"` with the desired DynamoDB table name.
-
-3. Configure the DynamoDB table name in your Terraform backend configuration, as shown in step 1.
-
-By following these steps, you can securely store your Terraform state in S3 with state locking using DynamoDB, mitigating the disadvantages of storing sensitive information in version control systems and ensuring safe concurrent access to your infrastructure.
+```powershell
+$stateGroup = "tf-state-rg"
+$stateAccount = "tfstateYOURUNIQUESUFFIX"
+# Replace the placeholder above with lowercase letters/digits before running.
+az group create --name $stateGroup --location eastus
+az storage account create --name $stateAccount --resource-group $stateGroup --location eastus --sku Standard_LRS --kind StorageV2 --min-tls-version TLS1_2 --allow-blob-public-access false --allow-shared-key-access false
+$stateScope = az storage account show --name $stateAccount --resource-group $stateGroup --query id --output tsv
+$userObjectId = az ad signed-in-user show --query id --output tsv
+az role assignment create --assignee-object-id $userObjectId --assignee-principal-type User --role "Storage Blob Data Contributor" --scope $stateScope
+az storage container create --name tfstate --account-name $stateAccount --auth-mode login
+az storage account blob-service-properties update --account-name $stateAccount --resource-group $stateGroup --enable-versioning true --enable-delete-retention true --delete-retention-days 7
 ```
 
-Please note that you should adapt the configuration and commands to your specific AWS environment and requirements.
+The role may take several minutes to become effective. For a `403`, wait and rerun container creation. Do not enable storage keys to bypass the error. These commands assume a human Azure CLI user. An automation identity needs its own role assignment and should use managed identity or workload identity federation.
+
+In Bash, assign variables without `$` on the left (`stateGroup="tf-state-rg"`), and use `$(az ... --query id --output tsv)` for command results. The Azure CLI commands and flags are the same.
+
+## Configure Remote Backend in Terraform
+
+`backend.tf` contains:
+
+```hcl
+terraform {
+  backend "azurerm" {
+    use_cli          = true
+    use_azuread_auth = true
+    container_name   = "tfstate"
+    key              = "day4/terraform.tfstate"
+  }
+}
+```
+
+From `Day-4`, pass the remaining names as non-secret backend settings. In the same PowerShell terminal:
+
+```powershell
+terraform init -backend-config="resource_group_name=$stateGroup" -backend-config="storage_account_name=$stateAccount"
+terraform fmt
+terraform validate
+terraform plan -out=state.tfplan
+terraform apply state.tfplan
+terraform state list
+terraform destroy
+```
+
+Day 1's public-key input is still needed: `main.tf` creates one paid Azure VM and disk. Verify the state Blob appears in the private container. No storage access key or client secret belongs in backend code or command arguments. Backend blocks cannot use `var.*`, locals or resource references.
+
+For existing local state, back it up securely and use `terraform init -migrate-state` with these backend settings to copy it into Blob Storage; review the prompt. Use `-reconfigure` when changing connection settings without migrating state. Do not casually migrate a state that manages unrelated resources. Do not apply with the wrong backend.
+
+## State Locking with Azure Blob Leases
+
+The backend automatically acquires a lease during operations that write state. If another run holds it, wait or use `terraform plan -lock-timeout=5m`. Do not use `-lock=false` to bypass a teammate's operation. Only use `terraform force-unlock LOCK_ID` after confirming the owner is no longer running and the lock is stale. Never edit state JSON by hand. `terraform state list` shows managed addresses; `terraform state show ADDRESS` inspects one and may reveal sensitive data.
+
+## Collaborating with Git and .gitignore
+
+Commit `.tf`, documentation, non-secret example tfvars and `.terraform.lock.hcl`. Review changes with `git diff` and use your team's branch and pull request workflow. The repository's `.gitignore` excludes provider downloads, state, plans, local tfvars, keys and local backend settings. It deliberately allows provider lock files.
+
+```shell
+git status
+git diff
+git switch -c azure-lesson
+```
+
+Shared code alone does not share state. Teammates also need the same backend configuration and appropriate scoped data access. Never commit state or plans, even if outputs are marked sensitive. If a secret was committed, remove it from history as appropriate and rotate the credential.
+
+## Cleanup
+
+First run `terraform destroy` from `Day-4` and confirm the VM Resource Group is gone. Keep state storage until all infrastructure using it has been destroyed. Blob versions and retention can continue to incur storage charges. For this dedicated, unshared practice backend only, after successful destroy, delete the separate storage Resource Group:
+
+```powershell
+az group delete --name $stateGroup
+```
+
+Review the confirmation before deleting it: this removes its storage and state history. For a shared backend, keep it and manage retention with your team.
+
+References: [Azure backend authentication and locking](https://developer.hashicorp.com/terraform/language/backend/azurerm), [Azure CLI storage commands](https://learn.microsoft.com/en-us/cli/azure/storage).

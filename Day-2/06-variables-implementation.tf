@@ -1,35 +1,114 @@
-# Variables Demo
+terraform {
+  required_version = ">= 1.9, < 2.0"
+  required_providers {
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~> 4.0"
+    }
+  }
+}
 
-```hcl
+provider "azurerm" {
+  features {}
+  use_cli = true
+}
 
-# Define an input variable for the EC2 instance type
-variable "instance_type" {
-  description = "EC2 instance type"
+variable "location" {
+  description = "Azure region. Check VM size availability before applying."
   type        = string
-  default     = "t2.micro"
+  default     = "eastus"
 }
 
-# Define an input variable for the EC2 instance AMI ID
-variable "ami_id" {
-  description = "EC2 AMI ID"
+variable "name" {
+  description = "Short name used for this lesson's resources."
   type        = string
+  default     = "tf-day2-vars"
+  validation {
+    condition     = can(regex("^[a-z][a-z0-9-]{2,19}$", var.name))
+    error_message = "Use 3-20 lowercase letters, digits or hyphens, starting with a letter."
+  }
 }
 
-# Configure the AWS provider using the input variables
-provider "aws" {
-  region      = "us-east-1"
+variable "vm_size" {
+  description = "Small paid VM size; availability and price depend on your subscription."
+  type        = string
+  default     = "Standard_B1s"
 }
 
-# Create an EC2 instance using the input variables
-resource "aws_instance" "example_instance" {
-  ami           = var.ami_id
-  instance_type = var.instance_type
+variable "admin_ssh_public_key" {
+  description = "Your SSH PUBLIC key text, supplied through TF_VAR_admin_ssh_public_key."
+  type        = string
+  validation {
+    condition     = startswith(trimspace(var.admin_ssh_public_key), "ssh-rsa ")
+    error_message = "Supply an RSA SSH public key, not a private key or file path."
+  }
 }
 
-# Define an output variable to expose the public IP address of the EC2 instance
-output "public_ip" {
-  description = "Public IP address of the EC2 instance"
-  value       = aws_instance.example_instance.public_ip
+resource "azurerm_resource_group" "lesson" {
+  name     = "${var.name}-rg"
+  location = var.location
+  tags     = { purpose = "terraform-tutorial" }
 }
 
-```
+resource "azurerm_virtual_network" "lesson" {
+  name                = "${var.name}-vnet"
+  location            = azurerm_resource_group.lesson.location
+  resource_group_name = azurerm_resource_group.lesson.name
+  address_space       = ["10.10.0.0/16"]
+}
+
+resource "azurerm_subnet" "lesson" {
+  name                 = "vm-subnet"
+  resource_group_name  = azurerm_resource_group.lesson.name
+  virtual_network_name = azurerm_virtual_network.lesson.name
+  address_prefixes     = ["10.10.1.0/24"]
+}
+
+# No public IP: this first VM has no internet-facing login endpoint.
+resource "azurerm_network_interface" "lesson" {
+  name                = "${var.name}-nic"
+  location            = azurerm_resource_group.lesson.location
+  resource_group_name = azurerm_resource_group.lesson.name
+  ip_configuration {
+    name                          = "internal"
+    subnet_id                     = azurerm_subnet.lesson.id
+    private_ip_address_allocation = "Dynamic"
+  }
+}
+
+resource "azurerm_linux_virtual_machine" "lesson" {
+  name                            = "${var.name}-vm"
+  location                        = azurerm_resource_group.lesson.location
+  resource_group_name             = azurerm_resource_group.lesson.name
+  size                            = var.vm_size
+  admin_username                  = "azureuser"
+  disable_password_authentication = true
+  network_interface_ids           = [azurerm_network_interface.lesson.id]
+  admin_ssh_key {
+    username   = "azureuser"
+    public_key = var.admin_ssh_public_key
+  }
+  os_disk {
+    caching              = "ReadWrite"
+    storage_account_type = "Standard_LRS"
+    disk_size_gb         = 30
+  }
+  source_image_reference {
+    publisher = "Canonical"
+    offer     = "ubuntu-24_04-lts"
+    sku       = "server"
+    version   = "latest"
+  }
+  tags = { purpose = "terraform-tutorial" }
+}
+
+output "private_ip" {
+  description = "An internal address; it is not reachable directly from your laptop."
+  value       = azurerm_network_interface.lesson.private_ip_address
+}
+
+output "resource_group_name" {
+  value = azurerm_resource_group.lesson.name
+}
+
+# Finish this example with: terraform destroy

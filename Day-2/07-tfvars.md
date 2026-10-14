@@ -29,3 +29,47 @@ terraform apply -var-file=dev.tfvars
 ```
 
 By using `.tfvars` files, you can keep your Terraform code more generic and flexible while tailoring configurations to different scenarios and environments.
+
+## Loading values and protecting secrets
+
+`.tfvars` files are plain text; they do not encrypt secrets. Prefer Azure CLI login for this course and use tfvars for non-secret inputs. Never commit credentials. Ignoring a file does not remove it from earlier Git history.
+
+Inside `Day-2`, save the following as `dev.local.tfvars`:
+
+```hcl
+location = "eastus"
+name     = "tf-day2-dev"
+vm_size  = "Standard_B1s"
+```
+
+Terraform automatically loads `terraform.tfvars`, `terraform.tfvars.json`, and `*.auto.tfvars`/`*.auto.tfvars.json`. Other filenames require `-var-file`. For local CLI use, priority from lowest to highest is defaults, `TF_VAR_` environment variables, `terraform.tfvars`, `terraform.tfvars.json`, auto files in filename order, then `-var`/`-var-file` arguments in their supplied order. Later values win.
+
+Use the same inputs for planning and cleanup:
+
+```shell
+terraform plan -var-file=dev.local.tfvars -out=dev.tfplan
+terraform apply dev.tfplan
+terraform destroy -var-file=dev.local.tfvars
+```
+
+## Loading values and protecting secrets
+
+`.tfvars` files are plain text; they do not encrypt secrets. Prefer Azure CLI login for this course and use tfvars for non-secret inputs. Never commit credentials. Ignoring a file does not remove it from earlier Git history.
+
+Inside `Day-2`, save the following as `dev.local.tfvars`:
+
+```hcl
+location = "eastus"
+name     = "tf-day2-dev"
+vm_size  = "Standard_B1s"
+```
+
+Terraform automatically loads `terraform.tfvars`, `terraform.tfvars.json`, and `*.auto.tfvars`/`*.auto.tfvars.json`. Other filenames require `-var-file`. For local CLI use, priority from lowest to highest is defaults, `TF_VAR_` environment variables, `terraform.tfvars`, `terraform.tfvars.json`, auto files in filename order, then `-var`/`-var-file` arguments in their supplied order. Later values win.
+
+Use the same inputs for planning and cleanup:
+
+```shell
+terraform plan -var-file=dev.local.tfvars -out=dev.tfplan
+terraform apply dev.tfplan
+terraform destroy -var-file=dev.local.tfvars
+```

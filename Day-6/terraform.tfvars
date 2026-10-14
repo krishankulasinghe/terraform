@@ -1,1 +1,2 @@
-ami = "ami-053b0d53c279acc90"
+# This file contains only non-secret settings and is safe to commit.
+location = "eastus"

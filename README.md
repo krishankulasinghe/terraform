@@ -10,9 +10,9 @@ In this session, we'll introduce you to the fundamental concepts of Terraform an
 
 Get your hands dirty by installing Terraform on both MacOS, Linux and Windows. We'll guide you through the process with clear instructions and commands.
 
-#### Setting up Terraform for AWS
+#### Setting up Terraform for Azure
 
-Dive into AWS integration with Terraform. You'll learn how to set up your AWS credentials and configure the AWS provider within Terraform to start provisioning resources.
+Dive into Azure integration with Terraform. You'll learn how to sign in with Azure CLI and configure the AzureRM provider within Terraform to start provisioning resources.
 
 #### Writing Your First Terraform Code
 
@@ -22,9 +22,9 @@ Start writing actual Terraform code with a simple example. Learn about the basic
 
 Understand the lifecycle of terraform. What is terraform `init`, `plan` and `apply`.
 
-#### Launching an EC2 Instance
+#### Launching an Azure Linux Virtual Machine
 
-Take your skills up a notch by provisioning an EC2 instance on AWS using Terraform. Explore attributes like instance type, AMI, and tags to customize your instance.
+Take your skills up a notch by provisioning an Azure Linux VM using Terraform. Explore attributes like VM size, image reference, and tags to customize your VM.
 
 #### Terraform State Basics
 
@@ -84,13 +84,13 @@ Tackle security challenges associated with sensitive data in version control. Ex
 
 Uncover the role of Terraform backends in remote state storage. Learn why they're essential for maintaining infrastructure state and configurations.
 
-#### Implementing S3 Backend for State Storage
+#### Implementing Azure Blob Backend for State Storage
 
-Get hands-on experience configuring an S3 bucket as a backend for remote state storage. Understand how this setup improves collaboration and state management.
+Get hands-on experience configuring a private Azure Blob container as a backend for remote state storage. Understand how this setup improves collaboration and state management.
 
-#### State Locking with DynamoDB
+#### State Locking with Azure Blob Leases
 
-Dive into state locking and the prevention of concurrent updates. Implement state locking using DynamoDB as a backend mechanism, ensuring state consistency.
+Dive into state locking and the prevention of concurrent updates. Use the Azure backend's built-in Blob lease locking, ensuring state consistency.
 
 ## Day 5: Provisioning and Provisioners
 
@@ -108,7 +108,7 @@ Discover when to use provisioners during resource creation or destruction. Confi
 
 #### Failure Handling for Provisioners
 
-Gain insights into handling provisioner failures. Learn about retry mechanisms, timeouts, and the on_failure attribute to control provisioner behavior on failure.
+Gain insights into handling provisioner failures. Learn about connection timeouts, deliberate retries, and the on_failure attribute to control provisioner behavior on failure.
 
 ## Day 6: Managing Environments with Workspaces
 
@@ -133,3 +133,74 @@ Gain an overview of HashiCorp Vault, a powerful tool for secret management and d
 #### Integrating Terraform with Vault for Secrets
 
 Learn how to integrate Terraform with Vault to manage sensitive data securely. Discover how Vault can be used to store and distribute secrets within configurations.
+
+## Day 8: Migration to Terraform and Drift Detection
+
+Follow the [Azure import and drift exercise](Day-8/README.md) to bring an existing Resource Group under Terraform management, detect portal changes, and choose whether to restore or accept them.
+
+## Azure course prerequisites and running the examples
+
+Follow [installation](Day-1/03-install.md) and [Azure login and SSH setup](Day-1/04-aws-connection.md) first. Use Terraform 1.9 or newer (below 2.0; Day 7 requires 1.11 or newer), Azure CLI, OpenSSH and a practice Azure subscription. Examples use AzureRM 4.x. Check the [Azure pricing calculator](https://azure.microsoft.com/en-us/pricing/calculator/): small VMs are not automatically free. Disks, public IPs, load balancers, storage and data transfer may also cost money. A budget alert does not stop spending.
+
+The original paths are kept so existing links still work. Names containing `aws`, `ec2` or `vpc` now contain Azure lessons. Each of these directories is a separate root module:
+
+| Lesson | Run Terraform from | Instructions |
+| --- | --- | --- |
+| First VM | `Day-1/PROJECT-ec2-instance-creation` | [Steps](Day-1/PROJECT-ec2-instance-creation/steps.md) |
+| Variables | `Day-2` | [Variables](Day-2/05-variables.md) |
+| Two web servers | `Day-2/PROJECT-vpc-with-ec2` | [Project steps](Day-2/09-builtin-functions.md#project-two-azure-web-servers) |
+| Modules | `Day-3` | [Modules](Day-3/modules.md) |
+| Remote state | `Day-4` | [Backend setup](Day-4/statefile_scenarios.md) |
+| Provisioners | `Day-5` | [Provisioners](Day-5/provisioners.md) |
+| Workspaces | `Day-6` | Instructions below |
+| Vault | `Day-7` | [Vault setup](Day-7/02-vault-integration.md) |
+| Import and drift | A new practice directory | [Day 8](Day-8/README.md) |
+
+Terraform combines all `.tf` files directly in your current directory. It reads a subfolder only when a module calls it. Run independent Markdown examples in separate practice folders. Do not apply from the repository root.
+
+In each lesson, initialize, format, validate, review a plan, apply, inspect outputs, and clean up:
+
+```shell
+terraform init
+terraform fmt
+terraform validate
+terraform plan -out=lesson.tfplan
+terraform apply lesson.tfplan
+terraform output
+terraform destroy
+```
+
+Follow extra setup for Days 4 and 7 before init. `validate` checks code, not Azure permissions or capacity. Applying a saved plan executes it without another confirmation. Protect saved plans like state files, and create a new plan after changing code or inputs. Keep the same account, backend and inputs until destroy succeeds. Confirm the lesson Resource Group is gone in Azure. Stopping a VM can leave disk and IP charges.
+
+## Day 6: Workspace exercise
+
+A CLI workspace gives the same code a separate state. It does not switch subscriptions, permissions or code. The resource names in `Day-6/main.tf` include `terraform.workspace` so environments do not share VM names. Workspaces are useful for practice, but are not a security boundary. Use separate subscriptions and backends when strong environment isolation is needed.
+
+After Day 1 login and public-key setup, run from `Day-6`. All three environments use small paid VM sizes to limit costs. Create and destroy one environment at a time:
+
+```shell
+terraform init
+terraform fmt -recursive
+terraform validate
+terraform workspace new dev
+terraform workspace list
+terraform workspace show
+terraform plan -out=dev.tfplan
+terraform apply dev.tfplan
+terraform destroy
+terraform workspace select default
+terraform workspace delete dev
+```
+
+Repeat with `stage`, then `prod`, using a fresh plan for each workspace. If the workspace already exists, use `terraform workspace select dev` instead of `new`. Destroy resources in each workspace before deleting it; deleting a workspace does not delete Azure resources. Return to `default`, and destroy there too if you applied resources there.
+
+## Common Azure troubleshooting
+
+- Login/subscription error: repeat `az login`, check `az account show`, and set `ARM_SUBSCRIPTION_ID` in the same terminal as Terraform.
+- `AuthorizationFailed`: check your RBAC scope with an administrator. Contributor cannot grant roles, and Blob data access is a separate permission.
+- VM size unavailable or quota exceeded: follow Day 1's size check and choose another supported small size. In root VM examples use `-var='vm_size=...'`; in Days 3 and 6 adjust the module input or size map. Check its price first.
+- Provider registration denied: have an administrator register the required Azure resource providers. Disable automatic registration only after they confirm registration is complete.
+- Provider download error: check internet/proxy access and rerun init. Use `init -upgrade` only for an intentional provider update.
+- A plan showing `-/+` replaces a resource. Read the reason before applying; replacement can lose disk data.
+
+References: [AzureRM provider](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs), [Azure state backend](https://developer.hashicorp.com/terraform/language/backend/azurerm).

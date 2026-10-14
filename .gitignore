@@ -1,0 +1,15 @@
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+*.local.tfvars
+*.local.tfvars.json
+*.tfbackend
+.verification/
+.terraform-checks/
+*.pem
+*.key
+__pycache__/
+# Commit .terraform.lock.hcl: it records the selected provider versions.

@@ -24,9 +24,9 @@ In this example:
 You can then use the input variable within your module or configuration like this:
 
 ```hcl
-resource "example_resource" "example" {
+resource "azurerm_resource_group" "example" {
   name = var.example_var
-  # other resource configurations
+  location = "eastus"
 }
 ```
 
@@ -39,7 +39,7 @@ Output variables allow you to expose values from your module or configuration, m
 ```hcl
 output "example_output" {
   description = "An example output variable"
-  value       = resource.example_resource.example.id
+  value       = azurerm_resource_group.example.id
 }
 ```
 
@@ -60,3 +60,23 @@ output "root_output" {
 ```
 
 This allows you to share data and values between different parts of your Terraform configuration and create more modular and maintainable infrastructure-as-code setups.
+
+## Run the Azure variables example
+
+The snippets above illustrate inputs and outputs. For a complete example, use [06-variables-implementation.tf](06-variables-implementation.tf). It is a real `.tf` file; run from `Day-2`. Its project subfolder is a separate configuration.
+
+`vm_size` defaults to `Standard_B1s`. `location` defaults to `eastus`. `admin_ssh_public_key` has no default; supply its public key text using the Day 1 setup. A validation block checks the key format. Validation catches bad input but cannot guarantee Azure capacity or permission. Use specific types such as `list(string)`, `map(string)`, `bool` or `number` to describe expected input.
+
+The output is a private IP because this VM has no public IP. View it with `terraform output -raw private_ip`. Outputs are available after apply.
+
+This creates one paid VM and disk. Run and clean up:
+
+```shell
+terraform init
+terraform fmt
+terraform validate
+terraform plan -out=variables.tfplan
+terraform apply variables.tfplan
+terraform output
+terraform destroy
+```

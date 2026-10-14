@@ -1,9 +1,10 @@
+# The storage must exist BEFORE terraform init. See statefile_scenarios.md.
+# Supply its names with -backend-config. Never supply storage keys.
 terraform {
-  backend "s3" {
-    bucket         = "abhishek-s3-demo-xyz" # change this
-    key            = "abhi/terraform.tfstate"
-    region         = "us-east-1"
-    encrypt        = true
-    dynamodb_table = "terraform-lock"
+  backend "azurerm" {
+    use_cli          = true
+    use_azuread_auth = true
+    container_name   = "tfstate"
+    key              = "day4/terraform.tfstate"
   }
 }

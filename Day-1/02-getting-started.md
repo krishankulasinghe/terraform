@@ -2,11 +2,11 @@
 
 To get started with Terraform, it's important to understand some key terminology and concepts. Here are some fundamental terms and explanations.
 
-1. **Provider**: A provider is a plugin for Terraform that defines and manages resources for a specific cloud or infrastructure platform. 
-Examples of providers include AWS, Azure, Google Cloud, and many others. 
+1. **Provider**: A provider is a plugin for Terraform that defines and manages resources for a specific cloud or infrastructure platform.
+Examples of providers include Azure, Google Cloud, and many others.
 You configure providers in your Terraform code to interact with the desired infrastructure platform.
 
-2. **Resource**: A resource is a specific infrastructure component that you want to create and manage using Terraform. Resources can include virtual machines, databases, storage buckets, network components, and more. Each resource has a type and configuration parameters that you define in your Terraform code.
+2. **Resource**: A resource is a specific infrastructure component that you want to create and manage using Terraform. Resources can include virtual machines, databases, storage accounts, network components, and more. Each resource has a type and configuration parameters that you define in your Terraform code.
 
 3. **Module**: A module is a reusable and encapsulated unit of Terraform code. Modules allow you to package infrastructure configurations, making it easier to maintain, share, and reuse them across different parts of your infrastructure. Modules can be your own creations or come from the Terraform Registry, which hosts community-contributed modules.
 
@@ -22,8 +22,16 @@ You configure providers in your Terraform code to interact with the desired infr
 
 9. **Apply**: The `terraform apply` command is used to execute the changes specified in the plan. It creates, updates, or destroys resources based on the Terraform configuration.
 
-10. **Workspace**: Workspaces in Terraform are a way to manage multiple environments (e.g., development, staging, production) with separate configurations and state files. Workspaces help keep infrastructure configurations isolated and organized.
+10. **Workspace**: Workspaces in Terraform are a way to manage multiple environments (e.g., development, staging, production) with separate state files for the same configuration. Workspaces do not provide separate credentials or security isolation.
 
-11. **Remote Backend**: A remote backend is a storage location for your Terraform state files that is not stored locally. Popular choices for remote backends include Amazon S3, Azure Blob Storage, or HashiCorp Terraform Cloud. Remote backends enhance collaboration and provide better security and reliability for your state files.
+11. **Remote Backend**: A remote backend is a storage location for your Terraform state files that is not stored locally. Popular choices for remote backends include Azure Blob Storage or HCP Terraform. Remote backends enhance collaboration and provide better security and reliability for your state files.
 
 These are some of the essential terms you'll encounter when working with Terraform. As you start using Terraform for your infrastructure provisioning and management, you'll become more familiar with these concepts and how they fit together in your IaC workflows.
+
+## Azure terms and reading HCL
+
+A **subscription** is Azure's billing and permission boundary. A **Resource Group** holds related resources. A **region**, such as `eastus`, is where a resource runs.
+
+In `resource "azurerm_resource_group" "lesson"`, the first label is the resource type and the second is its name inside Terraform. The `name` argument is its actual name in Azure. A reference such as `azurerm_resource_group.lesson.location` reads an attribute and tells Terraform to create the group first. This is an implicit dependency. File order does not control creation order; independent resources can be created in parallel.
+
+All `.tf` files in one directory form one configuration. `(known after apply)` means Azure will supply a value later; do not invent an ID. Terraform manages resources recorded in this configuration's state, not everything in your subscription. Repeating an unchanged apply should propose no changes: this is called idempotence.

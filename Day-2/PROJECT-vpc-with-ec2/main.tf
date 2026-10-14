@@ -1,145 +1,198 @@
-resource "aws_vpc" "myvpc" {
-  cidr_block = var.cidr
-}
-
-resource "aws_subnet" "sub1" {
-  vpc_id                  = aws_vpc.myvpc.id
-  cidr_block              = "10.0.0.0/24"
-  availability_zone       = "us-east-1a"
-  map_public_ip_on_launch = true
-}
-
-resource "aws_subnet" "sub2" {
-  vpc_id                  = aws_vpc.myvpc.id
-  cidr_block              = "10.0.1.0/24"
-  availability_zone       = "us-east-1b"
-  map_public_ip_on_launch = true
-}
-
-resource "aws_internet_gateway" "igw" {
-  vpc_id = aws_vpc.myvpc.id
-}
-
-resource "aws_route_table" "RT" {
-  vpc_id = aws_vpc.myvpc.id
-
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.igw.id
+locals {
+  servers = {
+    one = "userdata.sh"
+    two = "userdata1.sh"
   }
 }
 
-resource "aws_route_table_association" "rta1" {
-  subnet_id      = aws_subnet.sub1.id
-  route_table_id = aws_route_table.RT.id
+resource "azurerm_resource_group" "lesson" {
+  name     = "tf-day2-web-rg"
+  location = var.location
 }
 
-resource "aws_route_table_association" "rta2" {
-  subnet_id      = aws_subnet.sub2.id
-  route_table_id = aws_route_table.RT.id
+resource "azurerm_virtual_network" "lesson" {
+  name                = "tutorial-vnet"
+  location            = azurerm_resource_group.lesson.location
+  resource_group_name = azurerm_resource_group.lesson.name
+  address_space       = [var.cidr]
 }
 
-resource "aws_security_group" "webSg" {
-  name   = "web"
-  vpc_id = aws_vpc.myvpc.id
+resource "azurerm_subnet" "web" {
+  for_each             = local.servers
+  name                 = "web-${each.key}"
+  resource_group_name  = azurerm_resource_group.lesson.name
+  virtual_network_name = azurerm_virtual_network.lesson.name
+  address_prefixes     = [cidrsubnet(var.cidr, 8, each.key == "one" ? 0 : 1)]
+}
 
-  ingress {
-    description = "HTTP from VPC"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+resource "azurerm_network_security_group" "web" {
+  name                = "web-nsg"
+  location            = azurerm_resource_group.lesson.location
+  resource_group_name = azurerm_resource_group.lesson.name
+  security_rule {
+    name                       = "AllowPracticeHTTP"
+    priority                   = 100
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "80"
+    source_address_prefix      = var.http_source_cidr
+    destination_address_prefix = "*"
   }
-  ingress {
-    description = "SSH"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "Web-sg"
-  }
+  # Azure's default AllowAzureLoadBalancerInBound rule permits health probes.
 }
 
-resource "aws_s3_bucket" "example" {
-  bucket = "abhisheksterraform2023project"
+resource "azurerm_subnet_network_security_group_association" "web" {
+  for_each                  = local.servers
+  subnet_id                 = azurerm_subnet.web[each.key].id
+  network_security_group_id = azurerm_network_security_group.web.id
 }
 
-
-resource "aws_instance" "webserver1" {
-  ami                    = "ami-0261755bbcb8c4a84"
-  instance_type          = "t2.micro"
-  vpc_security_group_ids = [aws_security_group.webSg.id]
-  subnet_id              = aws_subnet.sub1.id
-  user_data              = base64encode(file("userdata.sh"))
+resource "azurerm_public_ip" "web" {
+  name                = "web-lb-ip"
+  location            = azurerm_resource_group.lesson.location
+  resource_group_name = azurerm_resource_group.lesson.name
+  allocation_method   = "Static"
+  sku                 = "Standard"
 }
 
-resource "aws_instance" "webserver2" {
-  ami                    = "ami-0261755bbcb8c4a84"
-  instance_type          = "t2.micro"
-  vpc_security_group_ids = [aws_security_group.webSg.id]
-  subnet_id              = aws_subnet.sub2.id
-  user_data              = base64encode(file("userdata1.sh"))
-}
-
-#create alb
-resource "aws_lb" "myalb" {
-  name               = "myalb"
-  internal           = false
-  load_balancer_type = "application"
-
-  security_groups = [aws_security_group.webSg.id]
-  subnets         = [aws_subnet.sub1.id, aws_subnet.sub2.id]
-
-  tags = {
-    Name = "web"
+resource "azurerm_lb" "web" {
+  name                = "web-lb"
+  location            = azurerm_resource_group.lesson.location
+  resource_group_name = azurerm_resource_group.lesson.name
+  sku                 = "Standard"
+  frontend_ip_configuration {
+    name                 = "public"
+    public_ip_address_id = azurerm_public_ip.web.id
   }
 }
 
-resource "aws_lb_target_group" "tg" {
-  name     = "myTG"
-  port     = 80
-  protocol = "HTTP"
-  vpc_id   = aws_vpc.myvpc.id
+resource "azurerm_lb_backend_address_pool" "web" {
+  name            = "web-servers"
+  loadbalancer_id = azurerm_lb.web.id
+}
 
-  health_check {
-    path = "/"
-    port = "traffic-port"
+resource "azurerm_lb_probe" "web" {
+  name            = "http-health"
+  loadbalancer_id = azurerm_lb.web.id
+  protocol        = "Http"
+  port            = 80
+  request_path    = "/"
+}
+
+resource "azurerm_lb_rule" "web" {
+  name                           = "http"
+  loadbalancer_id                = azurerm_lb.web.id
+  protocol                       = "Tcp"
+  frontend_port                  = 80
+  backend_port                   = 80
+  frontend_ip_configuration_name = "public"
+  backend_address_pool_ids       = [azurerm_lb_backend_address_pool.web.id]
+  probe_id                       = azurerm_lb_probe.web.id
+  disable_outbound_snat          = true
+}
+
+# Explicit outbound access lets the private VMs install Apache.
+resource "azurerm_lb_outbound_rule" "web" {
+  name                    = "internet-outbound"
+  loadbalancer_id         = azurerm_lb.web.id
+  backend_address_pool_id = azurerm_lb_backend_address_pool.web.id
+  protocol                = "All"
+  frontend_ip_configuration {
+    name = "public"
   }
 }
 
-resource "aws_lb_target_group_attachment" "attach1" {
-  target_group_arn = aws_lb_target_group.tg.arn
-  target_id        = aws_instance.webserver1.id
-  port             = 80
-}
-
-resource "aws_lb_target_group_attachment" "attach2" {
-  target_group_arn = aws_lb_target_group.tg.arn
-  target_id        = aws_instance.webserver2.id
-  port             = 80
-}
-
-resource "aws_lb_listener" "listener" {
-  load_balancer_arn = aws_lb.myalb.arn
-  port              = 80
-  protocol          = "HTTP"
-
-  default_action {
-    target_group_arn = aws_lb_target_group.tg.arn
-    type             = "forward"
+resource "azurerm_network_interface" "web" {
+  for_each            = local.servers
+  name                = "web-${each.key}-nic"
+  location            = azurerm_resource_group.lesson.location
+  resource_group_name = azurerm_resource_group.lesson.name
+  ip_configuration {
+    name                          = "internal"
+    subnet_id                     = azurerm_subnet.web[each.key].id
+    private_ip_address_allocation = "Dynamic"
   }
 }
 
-output "loadbalancerdns" {
-  value = aws_lb.myalb.dns_name
+resource "azurerm_network_interface_backend_address_pool_association" "web" {
+  for_each                = local.servers
+  network_interface_id    = azurerm_network_interface.web[each.key].id
+  ip_configuration_name   = "internal"
+  backend_address_pool_id = azurerm_lb_backend_address_pool.web.id
 }
+
+resource "azurerm_linux_virtual_machine" "web" {
+  for_each                        = local.servers
+  name                            = "web-${each.key}"
+  location                        = azurerm_resource_group.lesson.location
+  resource_group_name             = azurerm_resource_group.lesson.name
+  size                            = var.vm_size
+  admin_username                  = "azureuser"
+  disable_password_authentication = true
+  network_interface_ids           = [azurerm_network_interface.web[each.key].id]
+  custom_data                     = base64encode(file("${path.module}/${each.value}"))
+  admin_ssh_key {
+    username   = "azureuser"
+    public_key = var.admin_ssh_public_key
+  }
+  os_disk {
+    caching              = "ReadWrite"
+    storage_account_type = "Standard_LRS"
+    disk_size_gb         = 30
+  }
+  source_image_reference {
+    publisher = "Canonical"
+    offer     = "ubuntu-24_04-lts"
+    sku       = "server"
+    version   = "latest"
+  }
+  depends_on = [
+    azurerm_lb_outbound_rule.web,
+    azurerm_network_interface_backend_address_pool_association.web,
+    azurerm_subnet_network_security_group_association.web,
+  ]
+}
+
+resource "random_string" "suffix" {
+  length  = 10
+  special = false
+  upper   = false
+}
+
+resource "azurerm_storage_account" "lesson" {
+  name                            = "tflab${random_string.suffix.result}"
+  location                        = azurerm_resource_group.lesson.location
+  resource_group_name             = azurerm_resource_group.lesson.name
+  account_tier                    = "Standard"
+  account_replication_type        = "LRS"
+  min_tls_version                 = "TLS1_2"
+  shared_access_key_enabled       = false
+  allow_nested_items_to_be_public = false
+}
+
+data "azurerm_client_config" "current" {}
+
+resource "azurerm_role_assignment" "blob" {
+  scope                = azurerm_storage_account.lesson.id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = data.azurerm_client_config.current.object_id
+}
+
+resource "azurerm_storage_container" "lesson" {
+  name                  = "practice"
+  storage_account_id    = azurerm_storage_account.lesson.id
+  container_access_type = "private"
+  depends_on            = [azurerm_role_assignment.blob]
+}
+
+output "website_url" {
+  value = "http://${azurerm_public_ip.web.ip_address}"
+}
+
+output "storage_account_name" {
+  value = azurerm_storage_account.lesson.name
+}
+
+# Finish this paid two-VM example with: terraform destroy

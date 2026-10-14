@@ -3,24 +3,31 @@
 A provider in Terraform is a plugin that enables interaction with an API. 
 This includes cloud providers, SaaS providers, and other APIs. The providers are specified in the Terraform configuration code. They tell Terraform which services it needs to interact with.
 
-For example, if you want to use Terraform to create a virtual machine on AWS, you would need to use the aws provider. The aws provider provides a set of resources that Terraform can use to create, manage, and destroy virtual machines on AWS.
-
-Here is an example of how to use the aws provider in a Terraform configuration:
+For example, to create an Azure Resource Group, use the AzureRM provider. A Resource Group alone has no separate charge. Complete Day 1 login and set ARM_SUBSCRIPTION_ID first. Save this standalone example in its own folder:
 
 ```hcl
-provider "aws" {
-  region = "us-east-1"
+terraform {
+  required_version = ">= 1.9, < 2.0"
+  required_providers {
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~> 4.0"
+    }
+  }
 }
 
-resource "aws_instance" "example" {
-  ami = "ami-0123456789abcdef0" # Change the AMI 
-  instance_type = "t2.micro"
+provider "azurerm" {
+  features {}
+  use_cli = true
+}
+
+resource "azurerm_resource_group" "example" {
+  name     = "tf-provider-demo-rg"
+  location = "eastus"
 }
 ```
 
-In this example, we are first defining the aws provider. We are specifying the region as us-east-1. Then, we are defining the `aws_instance` resource. We are specifying the `AMI ID` and the `instance type`.
-
-When Terraform runs, it will first install the aws provider. Then, it will use the aws provider to create the virtual machine.
+When you run terraform init, Terraform installs AzureRM. Plan and apply use it to talk to Azure and manage the Resource Group.
 
 Here are some other examples of providers:
 
@@ -37,60 +44,34 @@ Providers are an essential part of Terraform. They allow Terraform to interact w
 
 ## Different ways to configure providers in terraform
 
-There are three main ways to configure providers in Terraform:
+Provider requirements and provider configuration have different jobs:
 
-### In the root module 
+### In the root module
 
-This is the most common way to configure providers. The provider configuration block is placed in the root module of the Terraform configuration. This makes the provider configuration available to all the resources in the configuration.
-
-```hcl
-provider "aws" {
-  region = "us-east-1"
-}
-
-resource "aws_instance" "example" {
-  ami = "ami-0123456789abcdef0"
-  instance_type = "t2.micro"
-}
-```
+Configure the provider in the root module, as above. AzureRM requires `features {}`. Its subscription comes from `ARM_SUBSCRIPTION_ID`, and `use_cli = true` uses your Azure CLI login.
 
 ### In a child module
 
-You can also configure providers in a child module. This is useful if you want to reuse the same provider configuration in multiple resources.
+Reusable child modules declare their provider requirements and usually inherit the root's default configuration. Avoid putting a provider configuration in a reusable child. Day 3 shows this pattern. To pass a different configuration, use a `providers` map in the parent module call, for example:
 
 ```hcl
-module "aws_vpc" {
-  source = "./aws_vpc"
-  providers = {
-    aws = aws.us-west-2
-  }
-}
-
-resource "aws_instance" "example" {
-  ami = "ami-0123456789abcdef0"
-  instance_type = "t2.micro"
-  depends_on = [module.aws_vpc]
+# Fragment: add to a module call after defining azurerm.secondary in the root.
+providers = {
+  azurerm = azurerm.secondary
 }
 ```
 
 ### In the required_providers block
 
-You can also configure providers in the required_providers block. This is useful if you want to make sure that a specific provider version is used.
+`required_providers` selects the plugin source and allowed versions; it does not configure login or region. The complete example above uses AzureRM 4.x. Commit the generated `.terraform.lock.hcl` file to record the selected version and checksums. Use `terraform init -upgrade` only for a deliberate update, then validate and review a new plan.
 
-```hcl
-terraform {
-  required_providers {
-    aws = {
-      source = "hashicorp/aws"
-      version = "~> 3.79"
-    }
-  }
-}
+Run the standalone example and clean it up:
 
-resource "aws_instance" "example" {
-  ami = "ami-0123456789abcdef0"
-  instance_type = "t2.micro"
-}
+```shell
+terraform init
+terraform fmt
+terraform validate
+terraform plan -out=provider.tfplan
+terraform apply provider.tfplan
+terraform destroy
 ```
-
-The best way to configure providers depends on your specific needs. If you are only using a single provider, then configuring it in the root module is the simplest option. If you are using multiple providers, or if you want to reuse the same provider configuration in multiple resources, then configuring it in a child module is a good option. And if you want to make sure that a specific provider version is used, then configuring it in the required_providers block is the best option.

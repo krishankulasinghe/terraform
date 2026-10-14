@@ -1,15 +1,13 @@
 #!/bin/bash
-apt update
-apt install -y apache2
+set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
+apt-get -o Acquire::Retries=5 update
+apt-get -o Acquire::Retries=5 install -y apache2 curl
 
-# Get the instance ID using the instance metadata
-INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
+# Get the Azure VM name using Azure Instance Metadata Service
+VM_NAME=$(curl --fail --silent --noproxy '*' -H Metadata:true 'http://169.254.169.254/metadata/instance/compute/name?api-version=2021-02-01&format=text')
 
-# Install the AWS CLI
-apt install -y awscli
-
-# Download the images from S3 bucket
-#aws s3 cp s3://myterraformprojectbucket2023/project.webp /var/www/html/project.png --acl public-read
+# The private Blob container is a separate storage exercise; this page needs no credentials.
 
 # Create a simple HTML file with the portfolio content and display the images
 cat <<EOF > /var/www/html/index.html
@@ -30,8 +28,8 @@ cat <<EOF > /var/www/html/index.html
   </style>
 </head>
 <body>
-  <h1>Terraform Project Server 1</h1>
-  <h2>Instance ID: <span style="color:green">$INSTANCE_ID</span></h2>
+  <h1>Terraform Project Server 2</h1>
+  <h2>Azure VM: <span style="color:green">$VM_NAME</span></h2>
   <p>Welcome to CloudChamp's Channel</p>
   
 </body>

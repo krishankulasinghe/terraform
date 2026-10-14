@@ -12,7 +12,7 @@ Before the advent of IaC, infrastructure management was typically a manual and t
 
 5. Slow Provisioning: Provisioning new resources or environments was a time-consuming process that involved multiple manual steps, leading to delays in project delivery.
 
-IaC addresses these challenges by providing a systematic, automated, and code-driven approach to infrastructure management. Popular IaC tools include Terraform, AWS CloudFormation, Azure Resource Manager templates others. 
+IaC addresses these challenges by providing a systematic, automated, and code-driven approach to infrastructure management. Popular IaC tools include Terraform, Azure Bicep and Azure Resource Manager templates.
 
 These tools enable organizations to define, deploy, and manage their infrastructure efficiently and consistently, making it easier to adapt to the dynamic needs of modern applications and services.
 
@@ -20,7 +20,7 @@ These tools enable organizations to define, deploy, and manage their infrastruct
 
 There are multiple reasons why Terraform is used over the other IaC tools but below are the main reasons.
 
-1. **Multi-Cloud Support**: Terraform is known for its multi-cloud support. It allows you to define infrastructure in a cloud-agnostic way, meaning you can use the same configuration code to provision resources on various cloud providers (AWS, Azure, Google Cloud, etc.) and even on-premises infrastructure. This flexibility can be beneficial if your organization uses multiple cloud providers or plans to migrate between them.
+1. **Multi-Cloud Support**: Terraform is known for its multi-cloud support. It uses a similar language and workflow across Azure, Google Cloud, other clouds and on-premises infrastructure. Each platform needs its own provider and resource definitions; the same resource code cannot be used unchanged across clouds. This flexibility can be beneficial if your organization uses multiple cloud providers or plans to migrate between them.
 
 2. **Large Ecosystem**: Terraform has a vast ecosystem of providers and modules contributed by both HashiCorp (the company behind Terraform) and the community. This means you can find pre-built modules and configurations for a wide range of services and infrastructure components, saving you time and effort in writing custom configurations.
 
